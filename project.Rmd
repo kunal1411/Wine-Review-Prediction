@@ -1,20 +1,8 @@
 ---
 title: "Project Report"
-author: "Group 3"
-date: "December 9, 2018"
+author: "Kunal Chauhan"
 output: html_document
 ---
-
-# Cover
-
-# Group3
-
-## Yunlin Chen
-## Kunal Chauhan
-## Kaiyue Liu
-## Tong Liu
-##Ayushi Sharma
-
 
 ```{r setup1, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
