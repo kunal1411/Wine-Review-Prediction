@@ -1,0 +1,567 @@
+---
+title: "Project Report"
+author: "Group 3"
+date: "December 9, 2018"
+output: html_document
+---
+
+# Cover
+
+# Group3
+
+## Yunlin Chen
+## Kunal Chauhan
+## Kaiyue Liu
+## Tong Liu
+##Ayushi Sharma
+
+
+```{r setup1, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(ggplot2)
+require(ggridges)
+require(dplyr)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(ggjoy)
+library(gridExtra)
+library(ggridges)
+```
+
+### Executive Summary:
+
+We analyzed Wine Review dataset from Kaggles.com to extract meaningful marketing insights from it to help online wine platform startup to navigate in the complicated market. We utilized ggplot library to create intuitive and informative visualizations to help identifying pattern and relationship between wine variables and reviewed scores. We further utilized linear regression analysis to further investigate the relationship we identified, and kept optimizing the model with feature engineering and natural language processing techniques. With the accurate model we trained, our client can not only determine popularity or quality of each product, but also predict scores when it is not available to provide customers with helpful information.
+
+### Motivation and Background:
+
+Our client is an Online e-commerce platform startup who sells wine. Our client has a dataset of their historical reviews, the Wine Review dataset. In order to maximize revenue and profit, our client would like to carry products with higher scores. When new products coming in, they might not have review scores available, but the platform still needs to provide meaningful recommendation for customers. 
+
+Our client want to know what types of wine are best-sellers with highest scores.
+Our client also want to be able to predict wine scores based on other variables.
+
+### Data description:
+The list of variables are as follows:
+Country: The country that the wine is from.
+Description: A few sentences from a sommelier describing the wine's taste, smell, look, feel, etc.
+Designation: The vineyard within the winery where the grapes that made the wine are from.
+Points: The number of points WineEnthusiast rated the wine on a scale of 1-100 (though they say they only post reviews for wines that score >=80).
+Price: The cost for a bottle of the wine.
+Province: The province or state that the wine is from.
+Region 1: The wine growing area in a province or state (ie Napa).
+Region 2: Sometimes there are more specific regions specified within a wine growing area (ie Rutherford inside the Napa Valley), but this value can sometimes be blank.
+Taster Name: Name of the person who tasted and reviewed the wine.
+Taster twitter handle: Twitter handle for the person who tasted and reviewed the wine.
+Title: The title of the wine review, which often contains the vintage if you're interested in extracting that feature.
+Variety: The type of grapes used to make the wine.
+Winery: The winery that made the wine.
+
+### Exploratory Analysis
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+setwd("d:/winedata")
+wine <- read.csv('wine.csv')
+province.tb <- (table(wine$province))
+taster.tb <- (table(wine$taster_name))
+country.tb <- (table(wine$country))
+variety.tb <- (table(wine$variety))
+points.tb <- hist(wine$points)
+price.tb <- hist(log(wine$price))
+province.10 <- sort(province.tb, decreasing = T)[1:10]
+country.10 <- sort(country.tb, decreasing = T)[1:10]
+taster.10 <- sort(taster.tb, decreasing  = T)[1:10]
+country.10 <- sort(country.tb, decreasing = T)[1:10]
+variety.10 <- sort(variety.tb, decreasing = T)[1:10]
+```
+
+```{r province and variety}
+df <-
+  wine[wine$province %in% names(province.10) &
+  wine$variety %in% names(variety.10), ]
+tb <- as.data.frame(table(df$province, df$variety))
+tb <- subset(tb, tb$Var1 %in% df$province & tb$Var2 %in% df$variety)
+ggplot(data = tb, aes(x = Var1, y = Var2, fill = log(Freq))) + geom_tile() +
+  labs(title = "Frequency") + labs(x = 'Province') + labs(y = 'Variety') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r province and variety price}
+price.pro.var <-
+  df %>% group_by(province, variety) %>% summarise(price.med = median(price, na.rm =
+  T))
+ggplot(data = price.pro.var, aes(
+  x = province,
+  y = variety,
+  fill = log(price.med)
+  )) + geom_tile() + labs(title = "Price") + labs(x = 'Province') + labs(y =
+  'Variety') + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+  
+points.pro.var <-
+  df %>% group_by(province, variety) %>% summarise(points.med = median(points, na.rm =
+  T))
+ggplot(data = points.pro.var, aes(x = province, y = variety, fill = points.med)) +
+  geom_tile() + labs(title = "Points") + labs(x = 'Province') + labs(y = 'Variety') +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+```{r price and variety popularity}
+wine$pricy<-''
+wine$pricy[log(wine$price+1)<2.5]<-'Low'
+wine$pricy[log(wine$price+1)>=2.5 & log(wine$price)<3]<-'Mid-Low'
+wine$pricy[log(wine$price+1)>=3 & log(wine$price)<3.5]<-'Mid'
+wine$pricy[log(wine$price+1)>=3.5 & log(wine$price)<4.5]<-'Mid-High'
+wine$pricy[log(wine$price+1)>=4.5]<-'High'
+
+wine$pricy<-factor(wine$pricy,ordered=TRUE,levels=c('','Low','Mid-Low','Mid','Mid-High','High'))
+
+
+df <-
+  wine[wine$variety %in% names(variety.10) &
+  is.na(wine$price)==0, ]
+points.var.pri <-
+  df %>% group_by(variety, pricy) %>% summarise(points.med = median(points, na.rm =
+  T))
+ggplot(data = points.var.pri, aes(
+  x = variety,
+  y = pricy,
+  fill = (points.med)
+  )) + geom_tile() + labs(title = "Points") + labs(x = 'Variety') + labs(y =
+  'Price') + theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+```
+
+From heatmap we can intuitively see the relationship between variety, origin and points. In general, california have good quality wines, and the higher the price is, the higher the quality. This holds true for most of the products. With this pattern discovered, we can move foward and try to use a model to describe this relationship we found.
+
+### Modeling
+
+```{r pressure, echo=FALSE}
+library(modelr)
+setwd('d:/winedata')
+wine<- read.csv("wine1.csv")
+View(wine)
+summary(wine)
+```
+
+```{r}
+model1 <- lm(points ~ country+price+province+taster_name+variety, data=wine)
+model2 <- lm(points ~ log(price)+province+taster_name+variety, data=wine)
+summary(model1)
+summary(model2)
+```
+
+After analysing the dataset and rigorous model testing we narrowed it down to the following three models. The models show a change in the selection of the variables and are arranged in an incremental order of their fit and ability to predict the “Points” better than the previous one. The deciding parameters considered to describe the best fit model is explained in the subsequent sections.
+
+Model 1: Full model to predict the points using the following variables
+
+Model 2: Selected varaibles with log transformed price
+
+
+### Word Count and NLP
+
+```{r, message=FALSE, warning=FALSE}
+# Any results you write to the current directory are saved as output.
+
+full_data <- read_csv("wine.csv")
+
+# Remove any NAs
+full_data <- full_data[!is.na(full_data$price), ]
+
+
+```
+
+### Top 30 varieties reviewed
+
+I will limit the dataset to the 30 most reviewed wine varieties.
+
+
+
+```{r, message=FALSE}
+top_30df <- full_data %>%
+  group_by(variety) %>%
+  summarise(count = n())%>%
+  arrange(desc(count))
+
+top_30df <- top_30df[1:30,1:2]
+
+top_30 <- top_30df$variety  
+
+new_data <- subset(full_data, variety %in% top_30)
+
+
+# Create a new variable to indicate whether wine is white or red
+new_data$wine_type <- ifelse(new_data$variety == "Chardonnay" | new_data$variety == "Riesling" | new_data$variety == "Sauvignon Blanc" | new_data$variety == "White Blend" | new_data$variety == "Sparkling Blend" | new_data$variety == "Pinot Gris" | new_data$variety == "Champagne Blend" | new_data$variety == "GrÃÂ¼ner Veltliner" | new_data$variety == "Pinot Grigio" | new_data$variety == "Portuguese White" | new_data$variety == "Viognier" | new_data$variety == "GewÃÂ¼rztraminer" | new_data$variety == "GewÃÂ¼rztraminer", "White Wine", "Red Wine")
+
+
+
+```
+
+## Word count analysis on how many words are in each review
+
+```{r, message=FALSE}
+new_data$wordcount <- sapply(gregexpr("\\S+", new_data$description), length)
+
+summary(new_data$wordcount)
+
+```
+
+
+#### Description with the highest wordcount
+
+```{r, message=FALSE}
+new_data$description[which(new_data$wordcount == 135)]
+
+```
+
+
+#### Description with the lowest wordcount
+
+```{r, message=FALSE}
+new_data$description[which(new_data$wordcount == 3)]
+
+#### Might look at eliminating some of these, although it's only a few 
+
+```
+
+
+### Wordcount distribution
+
+```{r, message=FALSE}
+ggplot(data = new_data, aes(x= wordcount))+
+  geom_histogram(binwidth = 3)+
+  labs(x = "Word Count", y= "Frequency", title = "Distribution of word count of description") #slightly right skewed
+
+```
+
+```{r, message=FALSE}
+ggplot(data = new_data, aes(x= wordcount, y= wine_type, fill = wine_type))+
+  geom_density_ridges ()+
+  labs(x = "Word Count", title = "Distribution of word count of description")+
+  scale_fill_cyclical(values = c("purple", "white"))
+
+```
+
+As displayed, there tend to be more words written to describe red wine as there are for white wines.
+
+#### Is there a correlation between word count and the score?
+
+```{r, message=FALSE}
+ggplot(data = new_data, aes(x=wordcount, y=points))+
+  geom_point()
+
+cor(new_data$points, new_data$wordcount)
+
+```
+
+
+There is a positive correlation between the number of words used in the description and the wines score (0.5450).
+
+
+## Regression model to predict the score a wine receives
+
+
+#### Model:  
+
+Add `wordcount` to previous model.
+
+
+```{r, message=FALSE}
+full_reg_varieties <- lm(points ~ wordcount + log(price) + province + taster_name + variety, data = new_data)
+summary(full_reg_varieties)
+
+par(mfrow = c(2,2))
+plot(full_reg_varieties)
+
+```
+
+Including the wine's variety in model provides the highest R-squared at 0.566. 
+
+## Word Analysis
+
+Performing analysis on the below three wine varieties show us the most commonly used words to describe the varieties. Certain words were removed from the analysis. The name of the wine was removed from the analysis, as were the words "wine" "flavors" and "drink".
+
+
+### Pinot Noir(Most reviewed red wine)
+
+```{r, fig.width=8, fig.height=8, message=FALSE, warning=FALSE}
+# Load
+library("tm")
+library("SnowballC")
+library("wordcloud")
+library("RColorBrewer")
+
+
+#---------- Pinot Noir Word cloud ----------#
+
+pinot <- subset(new_data, variety == "Pinot Noir")
+
+descriptors <- Corpus(VectorSource(pinot$description))
+head(descriptors)
+
+# Convert the text to lower case
+descriptors <- tm_map(descriptors, content_transformer(tolower))
+# Remove numbers
+descriptors <- tm_map(descriptors, removeNumbers)
+# Remove english common stopwords
+descriptors <- tm_map(descriptors, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+descriptors <- tm_map(descriptors, removeWords, c("wine", "pinot", "noir", "drink", "flavors")) 
+# Remove punctuations
+descriptors <- tm_map(descriptors, removePunctuation)
+# Eliminate extra white spaces
+descriptors <- tm_map(descriptors, stripWhitespace)
+# Text stemming
+#descriptors <- tm_map(descriptors, stemDocument)
+
+# Build a term-document matrix
+dtm <- TermDocumentMatrix(descriptors)
+dtm_mat <- as.matrix(dtm)
+v <- sort(rowSums(dtm_mat),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 10)
+
+# Generate the Word cloud
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+
+```
+
+
+### Cabernet Sauvignon Words(Second most reviewed red wine)
+
+```{r, fig.width=8, fig.height=8, message=FALSE, warning=FALSE}
+#---------- Cabernet Sauvignon Word cloud ----------#
+
+cabsav <- subset(new_data, variety == "Cabernet Sauvignon")
+
+descriptors <- Corpus(VectorSource(cabsav$description))
+
+
+# Convert the text to lower case
+descriptors <- tm_map(descriptors, content_transformer(tolower))
+# Remove numbers
+descriptors <- tm_map(descriptors, removeNumbers)
+# Remove english common stopwords
+descriptors <- tm_map(descriptors, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+descriptors <- tm_map(descriptors, removeWords, c("wine", "drink", "cabernet", "flavors")) 
+# Remove punctuations
+descriptors <- tm_map(descriptors, removePunctuation)
+# Eliminate extra white spaces
+descriptors <- tm_map(descriptors, stripWhitespace)
+# Text stemming
+#descriptors <- tm_map(descriptors, stemDocument)
+
+# Build a term-document matrix
+dtm <- TermDocumentMatrix(descriptors)
+dtm_mat <- as.matrix(dtm)
+v <- sort(rowSums(dtm_mat),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 10)
+
+# Generate the Word cloud
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+```
+
+
+
+
+### Chardonnay Words(Most reviewed white wine)
+
+```{r, fig.width=8, fig.height=8, message=FALSE, warning=FALSE}
+#---------- Chardonnay Noir Word cloud ----------#
+
+chardy <- subset(new_data, variety == "Chardonnay")
+
+descriptors <- Corpus(VectorSource(chardy$description))
+
+# Convert the text to lower case
+descriptors <- tm_map(descriptors, content_transformer(tolower))
+# Remove numbers
+descriptors <- tm_map(descriptors, removeNumbers)
+# Remove english common stopwords
+descriptors <- tm_map(descriptors, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+descriptors <- tm_map(descriptors, removeWords, c("wine", "chardonnay", "drink", "flavors")) 
+# Remove punctuations
+descriptors <- tm_map(descriptors, removePunctuation)
+# Eliminate extra white spaces
+descriptors <- tm_map(descriptors, stripWhitespace)
+# Text stemming
+#descriptors <- tm_map(descriptors, stemDocument)
+
+# Build a term-document matrix
+dtm <- TermDocumentMatrix(descriptors)
+dtm_mat <- as.matrix(dtm)
+v <- sort(rowSums(dtm_mat),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 10)
+
+# Generate the Word cloud
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+```
+
+
+As we can see, there is a considerable difference in the words used to describe red wines as opposed to white wines.We need to do some futher research like teasers NLP to figure out the difference of influence on each word.
+
+
+### Cabernet Sauvignon Words(Second most reviewed red wine)
+
+```{r, fig.width=8, fig.height=8, message=FALSE, warning=FALSE}
+#---------- Cabernet Sauvignon Word cloud ----------#
+
+cabsav <- subset(new_data, variety == "Cabernet Sauvignon")
+
+descriptors <- Corpus(VectorSource(cabsav$description))
+
+
+# Convert the text to lower case
+descriptors <- tm_map(descriptors, content_transformer(tolower))
+# Remove numbers
+descriptors <- tm_map(descriptors, removeNumbers)
+# Remove english common stopwords
+descriptors <- tm_map(descriptors, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+descriptors <- tm_map(descriptors, removeWords, c("wine", "drink", "cabernet", "flavors")) 
+# Remove punctuations
+descriptors <- tm_map(descriptors, removePunctuation)
+# Eliminate extra white spaces
+descriptors <- tm_map(descriptors, stripWhitespace)
+# Text stemming
+#descriptors <- tm_map(descriptors, stemDocument)
+
+# Build a term-document matrix
+dtm <- TermDocumentMatrix(descriptors)
+dtm_mat <- as.matrix(dtm)
+v <- sort(rowSums(dtm_mat),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 10)
+
+# Generate the Word cloud
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+```
+
+
+
+
+### Chardonnay Words(Most reviewed white wine)
+
+```{r, fig.width=8, fig.height=8, message=FALSE, warning=FALSE}
+#---------- Chardonnay Noir Word cloud ----------#
+
+chardy <- subset(new_data, variety == "Chardonnay")
+
+descriptors <- Corpus(VectorSource(chardy$description))
+
+# Convert the text to lower case
+descriptors <- tm_map(descriptors, content_transformer(tolower))
+# Remove numbers
+descriptors <- tm_map(descriptors, removeNumbers)
+# Remove english common stopwords
+descriptors <- tm_map(descriptors, removeWords, stopwords("english"))
+# Remove your own stop word
+# specify your stopwords as a character vector
+descriptors <- tm_map(descriptors, removeWords, c("wine", "chardonnay", "drink", "flavors")) 
+# Remove punctuations
+descriptors <- tm_map(descriptors, removePunctuation)
+# Eliminate extra white spaces
+descriptors <- tm_map(descriptors, stripWhitespace)
+# Text stemming
+#descriptors <- tm_map(descriptors, stemDocument)
+
+# Build a term-document matrix
+dtm <- TermDocumentMatrix(descriptors)
+dtm_mat <- as.matrix(dtm)
+v <- sort(rowSums(dtm_mat),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+head(d, 10)
+
+# Generate the Word cloud
+set.seed(1234)
+wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+          max.words=200, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(8, "Dark2"))
+```
+
+
+As we can see, there is a considerable difference in the words used to describe red wines as opposed to white wines.
+
+
+## Regression model to predict the score a wine receives
+
+#### Model 1: 
+
+Using `wordcount` to predict `points`
+
+```{r, message=FALSE}
+word_reg <- lm(points ~ wordcount, data = new_data)
+summary(word_reg)
+
+par(mfrow = c(2,2))
+plot(word_reg)
+
+```
+
+With a significant p-value, `wordcount` is a significant predictor of `points`. The linear model is significant, and has an adjusted-R^2 of 0.2971.   
+
+
+#### Model 2: 
+
+Using `wordcount` and `price` to predict `points`
+
+```{r, message=FALSE}
+full_reg <- lm(points ~ wordcount + log(price), data = new_data)
+summary(full_reg)
+
+par(mfrow = c(2,2))
+plot(full_reg)
+
+```
+
+Including log(price) in our model increases the strength of the model, with an adjusted R^2 of 0.5017.
+
+
+#### Model 3 
+
+Using `wordcount`, `price` and `variety` to predict `points`
+
+
+```{r, message=FALSE}
+full_reg_varieties <- lm(points ~ wordcount + log(price) + variety, data = new_data)
+summary(full_reg_varieties)
+
+par(mfrow = c(2,2))
+plot(full_reg)
+
+```
+
+Including the wine's variety in model three provides the highest R-squared at 0.531. While some of the coefficients in variety aren't statistically significant (*Malbec* and *White Blend* p-value >0.05), the rest of the varieties are significant.
+
+
+### Findings and managerial implications
+
+Data shows that certain pattern exist between wine variety and scores.
+We can quantify this relationship with our linear model.
+
+Price is a very important factor, and generally the higher the price is, the higher review scores. Price has a long tail distribution, and a logarithm transformation would facilitate training of the model.
+
+Most information reside in unstructured data, review description. In general, the more words the description has, the higher scores the product gets.
+
+Our client can use our model to determine good product by looking at the coefficient values.
+Our client can use our model to predict scores of new products even when real scores are not available.
